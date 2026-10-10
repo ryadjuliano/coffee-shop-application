@@ -4,7 +4,7 @@ import { createClient } from "@/lib/supabase/server";
 import { formatRupiah, formatTime, startOfTodayWIB } from "@/lib/format";
 import { logout } from "../login/actions";
 
-export const metadata: Metadata = { title: "Dashboard · KopiPOS" };
+export const metadata: Metadata = { title: "Dashboard · Coffee Shop Application" };
 
 type Order = {
   id: number;
