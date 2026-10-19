@@ -1,160 +1,191 @@
 import type { Metadata } from "next";
-import { redirect } from "next/navigation";
-import { createClient } from "@/lib/supabase/server";
-import { formatRupiah, formatTime, startOfTodayWIB } from "@/lib/format";
-import { logout } from "../login/actions";
+import { formatRupiah } from "@/lib/format";
+import {
+  DUMMY_TRANSACTIONS,
+  DUMMY_WEEKLY_SALES,
+  transactionTotal,
+  type Payment,
+} from "@/lib/dummy-data";
 
 export const metadata: Metadata = { title: "Dashboard · Coffee Shop Application" };
 
-type Order = {
-  id: number;
-  total: number;
-  payment_method: string;
-  created_at: string;
-  order_items: { qty: number; products: { name: string; emoji: string } | null }[];
-};
+const PAYMENTS: Payment[] = ["QRIS", "Tunai", "Debit"];
 
-const PAYMENT_LABEL: Record<string, string> = {
-  cash: "Tunai",
-  qris: "QRIS",
-  debit: "Debit",
-};
+export default function DashboardPage() {
+  const transactions = DUMMY_TRANSACTIONS;
+  const revenue = transactions.reduce((sum, t) => sum + transactionTotal(t), 0);
+  const itemsSold = transactions.reduce(
+    (sum, t) => sum + t.items.reduce((s, i) => s + i.qty, 0),
+    0,
+  );
+  const average = Math.round(revenue / transactions.length);
 
-export default async function DashboardPage() {
-  const supabase = await createClient();
-  const { data: auth } = await supabase.auth.getClaims();
-  if (!auth) redirect("/login");
-
-  const [{ data: profile }, { data: orders }] = await Promise.all([
-    supabase
-      .from("profiles")
-      .select("full_name, role")
-      .eq("id", auth.claims.sub)
-      .single(),
-    supabase
-      .from("orders")
-      .select("id, total, payment_method, created_at, order_items(qty, products(name, emoji))")
-      .gte("created_at", startOfTodayWIB())
-      .order("created_at", { ascending: false })
-      .returns<Order[]>(),
-  ]);
-
-  const todayOrders = orders ?? [];
-  const revenue = todayOrders.reduce((sum, o) => sum + o.total, 0);
-  const average = todayOrders.length ? Math.round(revenue / todayOrders.length) : 0;
-
-  const soldByProduct = new Map<string, { emoji: string; qty: number }>();
-  for (const order of todayOrders) {
-    for (const item of order.order_items) {
-      if (!item.products) continue;
-      const entry = soldByProduct.get(item.products.name) ?? {
-        emoji: item.products.emoji,
-        qty: 0,
-      };
-      entry.qty += item.qty;
-      soldByProduct.set(item.products.name, entry);
+  const soldByProduct = new Map<string, number>();
+  for (const t of transactions) {
+    for (const i of t.items) {
+      soldByProduct.set(i.name, (soldByProduct.get(i.name) ?? 0) + i.qty);
     }
   }
-  const itemsSold = [...soldByProduct.values()].reduce((sum, p) => sum + p.qty, 0);
   const bestSellers = [...soldByProduct.entries()]
-    .sort((a, b) => b[1].qty - a[1].qty)
+    .sort((a, b) => b[1] - a[1])
     .slice(0, 5);
 
-  const firstName = profile?.full_name?.split(" ")[0] || "Kasir";
+  const byPayment = PAYMENTS.map((p) => {
+    const list = transactions.filter((t) => t.payment === p);
+    return {
+      payment: p,
+      count: list.length,
+      total: list.reduce((sum, t) => sum + transactionTotal(t), 0),
+    };
+  });
+
+  const weekTotal = DUMMY_WEEKLY_SALES.reduce((sum, d) => sum + d.revenue, 0);
+  const weekMax = Math.max(...DUMMY_WEEKLY_SALES.map((d) => d.revenue));
 
   return (
-    <div className="flex flex-1 flex-col">
-      <header className="border-b border-slate-200 bg-white">
-        <div className="mx-auto flex max-w-5xl items-center justify-between px-4 py-4">
-          <span className="text-lg font-bold">
-            Kopi<span className="text-amber-700">POS</span>
-          </span>
-          <div className="flex items-center gap-4">
-            <span className="hidden text-sm text-slate-500 sm:inline">
-              {auth.claims.email}
+    <div className="mx-auto max-w-6xl">
+      <div className="flex flex-wrap items-center justify-between gap-2">
+        <h1 className="text-2xl font-semibold">Dashboard</h1>
+        <span className="rounded-full bg-amber-50 px-3 py-1 text-xs font-medium text-amber-800">
+          Data dummy
+        </span>
+      </div>
+      <p className="mt-1 text-slate-500">Ringkasan penjualan hari ini.</p>
+
+      <section className="mt-6 grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+        <Stat label="Penjualan hari ini" value={formatRupiah(revenue)} />
+        <Stat label="Transaksi" value={transactions.length} />
+        <Stat label="Item terjual" value={itemsSold} />
+        <Stat label="Rata-rata / transaksi" value={formatRupiah(average)} />
+      </section>
+
+      <h2 className="mt-10 text-lg font-semibold">Report</h2>
+      <div className="mt-4 grid gap-6 lg:grid-cols-3">
+        <Card className="lg:col-span-2">
+          <div className="flex items-baseline justify-between">
+            <h3 className="font-semibold">Penjualan 7 hari terakhir</h3>
+            <span className="text-sm text-slate-500">
+              Total {formatRupiah(weekTotal)}
             </span>
-            <form action={logout}>
-              <button className="rounded-lg border border-slate-300 px-3 py-1.5 text-sm hover:bg-slate-50">
-                Keluar
-              </button>
-            </form>
           </div>
-        </div>
-      </header>
+          <div className="mt-6 flex h-48 items-end gap-2 border-b border-slate-200 sm:gap-4">
+            {DUMMY_WEEKLY_SALES.map((d, i) => {
+              const isToday = i === DUMMY_WEEKLY_SALES.length - 1;
+              return (
+                <div
+                  key={d.day}
+                  className="group relative flex h-full flex-1 items-end justify-center"
+                >
+                  <div
+                    className={`w-full max-w-10 rounded-t ${
+                      isToday ? "bg-amber-700" : "bg-amber-300 group-hover:bg-amber-400"
+                    }`}
+                    style={{ height: `${(d.revenue / weekMax) * 100}%` }}
+                  />
+                  <div className="pointer-events-none absolute -top-2 z-10 hidden -translate-y-full rounded-lg bg-slate-900 px-3 py-2 text-xs whitespace-nowrap text-white shadow group-hover:block">
+                    <p className="font-medium">{d.day}</p>
+                    <p>{formatRupiah(d.revenue)}</p>
+                    <p className="text-slate-300">{d.orders} transaksi</p>
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+          <div className="mt-2 flex gap-2 sm:gap-4">
+            {DUMMY_WEEKLY_SALES.map((d) => (
+              <span key={d.day} className="flex-1 text-center text-xs text-slate-500">
+                {d.day}
+              </span>
+            ))}
+          </div>
+        </Card>
 
-      <main className="mx-auto w-full max-w-5xl flex-1 px-4 py-8">
-        <h1 className="text-2xl font-semibold">Halo, {firstName} 👋</h1>
-        <p className="mt-1 text-slate-500">
-          <span className="capitalize">{profile?.role ?? "kasir"}</span> · Ringkasan
-          penjualan hari ini.
-        </p>
+        <Card>
+          <h3 className="font-semibold">Metode pembayaran</h3>
+          <ul className="mt-4 space-y-4">
+            {byPayment.map((p) => (
+              <li key={p.payment} className="text-sm">
+                <div className="flex justify-between">
+                  <span>{p.payment}</span>
+                  <span className="text-slate-500">
+                    {p.count} trx · {formatRupiah(p.total)}
+                  </span>
+                </div>
+                <div className="mt-1.5 h-2 overflow-hidden rounded-full bg-slate-100">
+                  <div
+                    className="h-full rounded-full bg-amber-600"
+                    style={{ width: `${(p.total / revenue) * 100}%` }}
+                  />
+                </div>
+              </li>
+            ))}
+          </ul>
 
-        <section className="mt-6 grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
-          <Stat label="Penjualan" value={formatRupiah(revenue)} />
-          <Stat label="Transaksi" value={todayOrders.length} />
-          <Stat label="Item terjual" value={itemsSold} />
-          <Stat label="Rata-rata / transaksi" value={formatRupiah(average)} />
-        </section>
+          <h3 className="mt-8 font-semibold">Produk terlaris</h3>
+          <ol className="mt-3 space-y-2 text-sm">
+            {bestSellers.map(([name, qty], i) => (
+              <li key={name} className="flex gap-3">
+                <span className="w-4 text-slate-400">{i + 1}</span>
+                <span className="flex-1">{name}</span>
+                <span className="font-medium">{qty}</span>
+              </li>
+            ))}
+          </ol>
+        </Card>
+      </div>
 
-        <div className="mt-8 grid gap-6 lg:grid-cols-5">
-          <section className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm lg:col-span-2">
-            <h2 className="font-semibold">Menu terlaris</h2>
-            {bestSellers.length === 0 ? (
-              <Empty />
-            ) : (
-              <ol className="mt-4 space-y-3">
-                {bestSellers.map(([name, { emoji, qty }], i) => (
-                  <li key={name} className="flex items-center gap-3 text-sm">
-                    <span className="w-4 text-slate-400">{i + 1}</span>
-                    <span className="text-xl">{emoji}</span>
-                    <span className="flex-1">{name}</span>
-                    <span className="font-medium">{qty} terjual</span>
-                  </li>
-                ))}
-              </ol>
-            )}
-          </section>
-
-          <section className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm lg:col-span-3">
-            <h2 className="font-semibold">Transaksi terbaru</h2>
-            {todayOrders.length === 0 ? (
-              <Empty />
-            ) : (
-              <ul className="mt-4 divide-y divide-slate-100">
-                {todayOrders.slice(0, 8).map((o) => (
-                  <li key={o.id} className="flex items-center gap-4 py-3 text-sm">
-                    <span className="w-12 text-slate-400">{formatTime(o.created_at)}</span>
-                    <span className="flex-1 truncate">
-                      {o.order_items
-                        .map((it) => `${it.qty}× ${it.products?.name ?? "?"}`)
-                        .join(", ")}
-                    </span>
-                    <span className="rounded-full bg-amber-50 px-2 py-0.5 text-xs text-amber-800">
-                      {PAYMENT_LABEL[o.payment_method] ?? o.payment_method}
-                    </span>
-                    <span className="w-24 text-right font-medium">
-                      {formatRupiah(o.total)}
-                    </span>
-                  </li>
-                ))}
-              </ul>
-            )}
-          </section>
-        </div>
-      </main>
+      <h2 className="mt-10 text-lg font-semibold">Transaksi hari ini</h2>
+      <Card className="mt-4 overflow-x-auto p-0">
+        <table className="w-full min-w-[640px] text-sm">
+          <thead className="border-b border-slate-200 text-left text-slate-500">
+            <tr>
+              <th className="px-5 py-3 font-medium">No. Transaksi</th>
+              <th className="px-5 py-3 font-medium">Jam</th>
+              <th className="px-5 py-3 font-medium">Item</th>
+              <th className="px-5 py-3 font-medium">Kasir</th>
+              <th className="px-5 py-3 font-medium">Bayar</th>
+              <th className="px-5 py-3 text-right font-medium">Total</th>
+            </tr>
+          </thead>
+          <tbody className="divide-y divide-slate-100">
+            {transactions.map((t) => (
+              <tr key={t.id}>
+                <td className="px-5 py-3 font-mono text-xs">{t.id}</td>
+                <td className="px-5 py-3 text-slate-500">{t.time}</td>
+                <td className="px-5 py-3">
+                  {t.items.map((i) => `${i.qty}× ${i.name}`).join(", ")}
+                </td>
+                <td className="px-5 py-3">{t.cashier}</td>
+                <td className="px-5 py-3">
+                  <span className="rounded-full bg-slate-100 px-2 py-0.5 text-xs">
+                    {t.payment}
+                  </span>
+                </td>
+                <td className="px-5 py-3 text-right font-medium">
+                  {formatRupiah(transactionTotal(t))}
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </Card>
     </div>
   );
 }
 
 function Stat({ label, value }: { label: string; value: string | number }) {
   return (
-    <div className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
+    <Card>
       <p className="text-sm text-slate-500">{label}</p>
       <p className="mt-1 text-2xl font-semibold">{value}</p>
-    </div>
+    </Card>
   );
 }
 
-function Empty() {
-  return <p className="mt-4 text-sm text-slate-500">Belum ada transaksi hari ini.</p>;
+function Card({ children, className = "" }: { children: React.ReactNode; className?: string }) {
+  return (
+    <div className={`rounded-2xl border border-slate-200 bg-white p-5 shadow-sm ${className}`}>
+      {children}
+    </div>
+  );
 }

@@ -1,49 +1,32 @@
 "use server";
 
+import { cookies } from "next/headers";
 import { redirect } from "next/navigation";
-import { createClient } from "@/lib/supabase/server";
+import { DUMMY_ADMIN, SESSION_COOKIE } from "@/lib/auth";
 
-export type AuthState = { error?: string; message?: string };
+export type LoginState = { error?: string };
 
 export async function login(
-  _prev: AuthState,
+  _prev: LoginState,
   formData: FormData,
-): Promise<AuthState> {
-  const supabase = await createClient();
-  const { error } = await supabase.auth.signInWithPassword({
-    email: String(formData.get("email")),
-    password: String(formData.get("password")),
-  });
+): Promise<LoginState> {
+  const email = String(formData.get("email")).trim().toLowerCase();
+  const password = String(formData.get("password"));
 
-  if (error) return { error: "Email atau password salah." };
-  redirect("/dashboard");
-}
-
-export async function signup(
-  _prev: AuthState,
-  formData: FormData,
-): Promise<AuthState> {
-  const supabase = await createClient();
-  const { data, error } = await supabase.auth.signUp({
-    email: String(formData.get("email")),
-    password: String(formData.get("password")),
-    options: {
-      data: {
-        full_name: String(formData.get("full_name")),
-      },
-    },
-  });
-
-  if (error) return { error: error.message };
-  // Jika konfirmasi email aktif, session belum ada.
-  if (!data.session) {
-    return { message: "Cek email untuk konfirmasi akun, lalu login." };
+  if (email !== DUMMY_ADMIN.email || password !== DUMMY_ADMIN.password) {
+    return { error: "Email atau password salah." };
   }
+
+  (await cookies()).set(SESSION_COOKIE, "admin", {
+    httpOnly: true,
+    sameSite: "lax",
+    path: "/",
+    maxAge: 60 * 60 * 8, // 8 jam
+  });
   redirect("/dashboard");
 }
 
 export async function logout() {
-  const supabase = await createClient();
-  await supabase.auth.signOut();
+  (await cookies()).delete(SESSION_COOKIE);
   redirect("/login");
 }
