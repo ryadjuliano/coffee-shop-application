@@ -1,24 +1,21 @@
--- Jalankan di Supabase Dashboard → SQL Editor
+-- =============================================================
+-- POS: MENU & TRANSAKSI
+-- Jalankan di Supabase Dashboard → SQL Editor SETELAH auth.sql
+-- (memakai fungsi is_staff() dan is_admin() dari file itu).
+-- =============================================================
 
--- 1. Profil staf (1:1 dengan auth.users)
-create table public.profiles (
-  id uuid primary key references auth.users (id) on delete cascade,
-  full_name text not null default '',
-  role text not null default 'kasir' check (role in ('kasir', 'admin')),
-  created_at timestamptz not null default now()
-);
-
--- 2. Menu / produk
+-- 1. Menu / produk
 create table public.products (
   id serial primary key,
   name text not null,
-  category text not null,
+  category text not null check (category in ('Kopi', 'Non-Kopi', 'Makanan')),
   price int not null check (price >= 0), -- dalam Rupiah
   emoji text not null default '☕',
-  is_active boolean not null default true
+  is_active boolean not null default true,
+  created_at timestamptz not null default now()
 );
 
--- 3. Transaksi
+-- 2. Transaksi
 create table public.orders (
   id bigserial primary key,
   cashier_id uuid references auth.users (id) on delete set null default auth.uid(),
@@ -27,7 +24,7 @@ create table public.orders (
   created_at timestamptz not null default now()
 );
 
--- 4. Item per transaksi
+-- 3. Item per transaksi
 create table public.order_items (
   id bigserial primary key,
   order_id bigint not null references public.orders (id) on delete cascade,
@@ -36,27 +33,30 @@ create table public.order_items (
   price int not null -- harga saat transaksi
 );
 
--- Row Level Security: semua staf yang login boleh baca menu & transaksi
-alter table public.profiles enable row level security;
+-- Row Level Security
 alter table public.products enable row level security;
 alter table public.orders enable row level security;
 alter table public.order_items enable row level security;
 
-create policy "Lihat profil sendiri" on public.profiles
-  for select using ((select auth.uid()) = id);
-create policy "Ubah profil sendiri" on public.profiles
-  for update using ((select auth.uid()) = id);
-
+-- Menu: semua staf aktif boleh lihat, hanya admin yang boleh ubah
 create policy "Staf lihat menu" on public.products
-  for select to authenticated using (true);
+  for select to authenticated using ((select public.is_staff()));
+create policy "Admin tambah menu" on public.products
+  for insert to authenticated with check ((select public.is_admin()));
+create policy "Admin ubah menu" on public.products
+  for update to authenticated using ((select public.is_admin()));
+create policy "Admin hapus menu" on public.products
+  for delete to authenticated using ((select public.is_admin()));
 
+-- Transaksi: staf aktif boleh lihat, kasir hanya membuat atas namanya sendiri
 create policy "Staf lihat transaksi" on public.orders
-  for select to authenticated using (true);
+  for select to authenticated using ((select public.is_staff()));
 create policy "Kasir buat transaksi" on public.orders
-  for insert to authenticated with check ((select auth.uid()) = cashier_id);
+  for insert to authenticated
+  with check ((select public.is_staff()) and (select auth.uid()) = cashier_id);
 
 create policy "Staf lihat item" on public.order_items
-  for select to authenticated using (true);
+  for select to authenticated using ((select public.is_staff()));
 create policy "Kasir tambah item" on public.order_items
   for insert to authenticated with check (
     exists (
@@ -64,23 +64,6 @@ create policy "Kasir tambah item" on public.order_items
       where o.id = order_id and o.cashier_id = (select auth.uid())
     )
   );
-
--- Buat profil otomatis saat staf daftar
-create function public.handle_new_user()
-returns trigger
-language plpgsql
-security definer set search_path = ''
-as $$
-begin
-  insert into public.profiles (id, full_name)
-  values (new.id, coalesce(new.raw_user_meta_data ->> 'full_name', ''));
-  return new;
-end;
-$$;
-
-create trigger on_auth_user_created
-  after insert on auth.users
-  for each row execute procedure public.handle_new_user();
 
 -- Data awal menu
 insert into public.products (name, category, price, emoji) values

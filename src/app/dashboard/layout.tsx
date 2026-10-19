@@ -1,5 +1,6 @@
-import { DUMMY_ADMIN } from "@/lib/auth";
+import { Suspense } from "react";
 import { logout } from "../login/actions";
+import { AdminInfo } from "./admin-info";
 import { Nav } from "./nav";
 
 export default function DashboardLayout({ children }: LayoutProps<"/dashboard">) {
@@ -11,8 +12,9 @@ export default function DashboardLayout({ children }: LayoutProps<"/dashboard">)
         </span>
         <Nav />
         <div className="mt-auto hidden border-t border-slate-200 px-3 pt-4 md:block">
-          <p className="text-sm font-medium">{DUMMY_ADMIN.name}</p>
-          <p className="text-xs text-slate-500">{DUMMY_ADMIN.email}</p>
+          <Suspense fallback={<div className="h-9 animate-pulse rounded bg-slate-100" />}>
+            <AdminInfo />
+          </Suspense>
           <form action={logout} className="mt-3">
             <button className="w-full rounded-lg border border-slate-300 px-3 py-1.5 text-sm hover:bg-slate-50">
               Keluar

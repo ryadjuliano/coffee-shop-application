@@ -1,31 +1,14 @@
 "use client";
 
+import Link from "next/link";
 import { useState } from "react";
 import { formatRupiah } from "@/lib/format";
-import {
-  CATEGORIES,
-  type Category,
-  type Product,
-} from "@/lib/dummy-data";
+import { CATEGORIES, type Category } from "@/lib/dummy-data";
 import { updateProducts, useProducts } from "./product-store";
 
-const input =
-  "w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm outline-none focus:border-amber-600 focus:ring-2 focus:ring-amber-100";
-
-export function ProductManager() {
+export function ProductList() {
   const products = useProducts();
   const [filter, setFilter] = useState<Category | "Semua">("Semua");
-
-  function addProduct(formData: FormData) {
-    const product: Product = {
-      id: crypto.randomUUID(),
-      name: String(formData.get("name")).trim(),
-      category: formData.get("category") as Category,
-      price: Number(formData.get("price")),
-      active: true,
-    };
-    updateProducts((prev) => [product, ...prev]);
-  }
 
   const toggleActive = (id: string) =>
     updateProducts((prev) =>
@@ -42,42 +25,8 @@ export function ProductManager() {
     filter === "Semua" ? products : products.filter((p) => p.category === filter);
 
   return (
-    <div className="mt-6 grid items-start gap-6 lg:grid-cols-3">
-      <form
-        action={addProduct}
-        className="space-y-4 rounded-2xl border border-slate-200 bg-white p-5 shadow-sm"
-      >
-        <h2 className="font-semibold">Tambah produk</h2>
-        <label className="block space-y-1">
-          <span className="text-sm font-medium text-slate-700">Nama produk</span>
-          <input name="name" required placeholder="mis. Vanilla Latte" className={input} />
-        </label>
-        <label className="block space-y-1">
-          <span className="text-sm font-medium text-slate-700">Kategori</span>
-          <select name="category" className={input} defaultValue="Kopi">
-            {CATEGORIES.map((c) => (
-              <option key={c}>{c}</option>
-            ))}
-          </select>
-        </label>
-        <label className="block space-y-1">
-          <span className="text-sm font-medium text-slate-700">Harga (Rp)</span>
-          <input
-            name="price"
-            type="number"
-            required
-            min={0}
-            step={500}
-            placeholder="25000"
-            className={input}
-          />
-        </label>
-        <button className="w-full rounded-lg bg-amber-700 py-2 text-sm font-medium text-white hover:bg-amber-800">
-          Simpan produk
-        </button>
-      </form>
-
-      <div className="rounded-2xl border border-slate-200 bg-white shadow-sm lg:col-span-2">
+    <div className="mt-6">
+      <div className="rounded-2xl border border-slate-200 bg-white shadow-sm">
         <div className="flex flex-wrap items-center justify-between gap-3 border-b border-slate-200 p-5">
           <h2 className="font-semibold">Daftar produk ({shown.length})</h2>
           <div className="flex flex-wrap gap-1">
@@ -138,7 +87,10 @@ export function ProductManager() {
               {shown.length === 0 && (
                 <tr>
                   <td colSpan={5} className="px-5 py-8 text-center text-slate-500">
-                    Belum ada produk di kategori ini.
+                    Belum ada produk di kategori ini.{" "}
+                    <Link href="/dashboard/products/new" className="font-medium text-amber-700 underline">
+                      Tambah produk
+                    </Link>
                   </td>
                 </tr>
               )}

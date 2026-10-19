@@ -11,7 +11,8 @@ Fitur saat ini:
 ## Setup
 
 1. Buat project di [supabase.com](https://supabase.com).
-2. Buka **SQL Editor**, lalu jalankan isi `supabase/schema.sql`.
+2. Buka **SQL Editor**, jalankan `supabase/auth.sql` lalu `supabase/schema.sql`
+   (urutannya penting). Buat akun admin pertama sesuai langkah di akhir `auth.sql`.
 3. Isi `.env.local` dengan nilai dari **Project Settings → API**:
    ```
    NEXT_PUBLIC_SUPABASE_URL=...
@@ -44,7 +45,8 @@ src/
     auth/confirm/route.ts  # verifikasi link email
     dashboard/             # dashboard penjualan
 supabase/
-  schema.sql               # tabel, RLS, trigger, menu awal
+  auth.sql                 # profil staf, role admin/kasir, RLS login
+  schema.sql               # menu, transaksi, RLS, menu awal
   seed-demo.sql            # contoh transaksi (opsional)
 ```
 

@@ -17,11 +17,25 @@ export function AuthForm() {
       <form action={action} className="mt-6 space-y-4">
         <label className="block space-y-1">
           <span className="text-sm font-medium text-slate-700">Email</span>
-          <input name="email" type="email" required className={input} />
+          <input
+            name="email"
+            type="email"
+            required
+            autoComplete="email"
+            defaultValue={state.email}
+            key={state.email}
+            className={input}
+          />
         </label>
         <label className="block space-y-1">
           <span className="text-sm font-medium text-slate-700">Password</span>
-          <input name="password" type="password" required className={input} />
+          <input
+            name="password"
+            type="password"
+            required
+            autoComplete="current-password"
+            className={input}
+          />
         </label>
 
         {state.error && (
@@ -38,12 +52,6 @@ export function AuthForm() {
           {pending ? "Memproses..." : "Masuk"}
         </button>
       </form>
-
-      <div className="mt-6 rounded-lg bg-amber-50 px-3 py-2 text-xs text-amber-900">
-        <p className="font-medium">Akun demo</p>
-        <p>Email: admin@kopinobori.com</p>
-        <p>Password: admin123</p>
-      </div>
     </div>
   );
 }
